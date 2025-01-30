@@ -3,6 +3,19 @@ class Piece:
         self.color = color
         self.has_moved = has_moved
 
+    def __str__(self):
+        """Returns a one-letter representation of the piece for board display."""
+        symbol_map = {
+            "King": "K",
+            "Queen": "Q",
+            "Rook": "R",
+            "Bishop": "B",
+            "Knight": "N",
+            "Pawn": "P",
+        }
+        piece_symbol = symbol_map.get(self.__class__.__name__, "?")
+        return piece_symbol if self.color == "white" else piece_symbol.lower()
+
     @staticmethod
     def in_bounds(position):
         """Check if a position is within the 8x8 chessboard."""
