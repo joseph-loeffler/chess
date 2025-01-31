@@ -50,39 +50,39 @@ class Piece:
                 moves.append((row + dr, col + dc))
         return moves
 
-    def valid_moves(self, position, board):
+    def valid_moves(self, piece_position, board_object):
         """Default method; should be overridden by subclasses."""
         raise NotImplementedError("Each piece must implement its own valid_moves method.")
 
 
 class Rook(Piece):
-    def valid_moves(self, position, board):
-        directions = [(0,1),(0,-1),(1, 0),(-1,0)]
-        return self.get_straight_line_moves(position, board, directions)
+    directions = [(0,1),(0,-1),(1, 0),(-1,0)]
+    def valid_moves(self, piece_position, board_object):
+        return self.get_straight_line_moves(piece_position, board_object.board, self.directions)
     
 
 class Bishop(Piece):
-    def valid_moves(self, position, board):
-        directions = [(1,1),(1,-1),(-1,1),(-1,-1)]
-        return self.get_straight_line_moves(position, board, directions)
+    directions = [(1,1),(1,-1),(-1,1),(-1,-1)]
+    def valid_moves(self, piece_position, board_object):
+        return self.get_straight_line_moves(piece_position, board_object.board, self.directions)
 
 
 class Queen(Piece):
-    def valid_moves(self, position, board):
-        directions = [(0,1),(0,-1),(1, 0),(-1,0),(1,1),(1,-1),(-1,1),(-1,-1)]
-        return self.get_straight_line_moves(position, board, directions)
+    directions = [(0,1),(0,-1),(1, 0),(-1,0),(1,1),(1,-1),(-1,1),(-1,-1)]
+    def valid_moves(self, piece_position, board_object):
+        return self.get_straight_line_moves(piece_position, board_object.board, self.directions)
         
     
 class Knight(Piece):
-    def valid_moves(self, position, board):
-        directions = [(1,2), (1,-2), (-1, 2), (-1,-2), (2,1), (2,-1), (-2,1), (-2,-1)]
-        return self.get_one_away_moves(position, directions)
+    directions = [(1,2), (1,-2), (-1, 2), (-1,-2), (2,1), (2,-1), (-2,1), (-2,-1)]
+    def valid_moves(self, piece_position, board_object):
+        return self.get_one_away_moves(piece_position, board_object.board, self.directions)
 
 
 class King(Piece):
-    def valid_moves(self, position, board):
-        directions = [(0,1),(0,-1),(1, 0),(-1,0),(1,1),(1,-1),(-1,1),(-1,-1)]
-        return self.get_one_away_moves(position, directions)
+    directions = [(0,1),(0,-1),(1, 0),(-1,0),(1,1),(1,-1),(-1,1),(-1,-1)]
+    def valid_moves(self, piece_position, board_object):
+        return self.get_one_away_moves(piece_position, board_object.board, self.directions)
     
 
 class Pawn(Piece):
@@ -90,10 +90,10 @@ class Pawn(Piece):
         super().__init__(color, has_moved)
         self.moved_two_ply = moved_two_ply
 
-    def valid_moves(self, position, board):
+    def valid_moves(self, piece_position, board_object):
         moves = []
-        row, col = position
-
+        row, col = piece_position
+        board = board_object.board
         # Moving forward (one or two) (if nothing blocking)
         direction = -1 if self.color == "white" else 1
         one_forward = (row + direction, col)
@@ -115,8 +115,14 @@ class Pawn(Piece):
             if (side_pawn_pos in board 
                 and board[side_pawn_pos].color != self.color
                 and isinstance(board[side_pawn_pos], Pawn)
-                and board[side_pawn_pos].moved_two_ply == board.ply - 1):
+                and board[side_pawn_pos].moved_two_ply == board_object.ply - 1):
                 
                 moves.append(diagonal_move)
         
         return moves
+
+if __name__ == "__main__":
+    pieces = [King("white"), Queen("white"), Rook("black"), Pawn("black")]
+
+    for piece in pieces:
+        print(f"{piece.color}: {piece}")
