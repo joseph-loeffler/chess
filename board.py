@@ -46,7 +46,7 @@ class Board:
                 row, col = curr_king_square
                 row += dr
                 col += dc
-                attacking_piece = self.board.get((row,col), None)
+                attacking_piece = self.board.get((row,col))
                 if (isinstance(attacking_piece, piece_class)
                     and attacking_piece.color != color):
                     return True
@@ -84,12 +84,64 @@ class Board:
             row, col = curr_king_square
             row += dr
             col += dc
-            attacking_piece = self.board.get((row,col), None)
+            attacking_piece = self.board.get((row,col))
             if (isinstance(attacking_piece, Pawn)
                 and attacking_piece.color != color):
                 return True
 
         return False
+
+    def move_causes_check(self, piece_position, target):
+        in_check = False
+        # store previous board state
+        piece = self.board.pop(piece_position)
+        target_square_piece = self.board.get(target)
+        
+        # modify board temporarily for simulation
+        self.board[target] = piece
+        if isinstance(piece, King):
+            self.king_positions[piece.color] = target
+
+        # check for checks
+        if self.in_check(piece.color):
+            in_check = True
+        
+        # return board to initial state
+        self.board[piece_position] = piece
+        if target_square_piece is None:
+            del self.board[target]
+        else:
+            self.board[target] = target_square_piece
+        if isinstance(piece, King):
+            self.king_positions[piece.color] = piece_position
+
+        return in_check
+
+    def can_castle(self, color, kingside):
+        """Returns True if castling (kingside or queenside) is legal for the given color."""
+        king_pos = self.king_positions[color]
+        king = self.board[king_pos]
+        if king.has_moved or self.in_check(king.color):
+            return False
+        
+        row = king_pos[0]
+        rook_col = 7 if kingside else 0
+        rook = self.board.get((row, rook_col))
+        
+        if rook is None or rook.has_moved:
+            return False
+
+        path = [(row, col) for col in (range(5,7) if kingside else range(1,4))]
+        for square in path:
+            if square in self.board or self.move_causes_check(king_pos, square):
+                return False
+        
+        # Check if a knight is blocking queenside castle
+        # as the above only checks the king's path
+        if not kingside and (7,1) in self.board:
+            return False
+        
+        return True
 
     def get_legal_moves(self, piece_position):
         if (piece_position not in self.board
@@ -102,31 +154,17 @@ class Board:
 
         legal_moves = []
         for move in moves:
-            # store previous board state
-            starting_square_piece = self.board[piece_position]
-            target_square_piece = None
-            if move in self.board:
-                target_square_piece = self.board[move]
-            
-            # modify board temporarily for simulation
-            del self.board[piece_position]
-            self.board[move] = piece
-            if isinstance(piece, King):
-                self.king_positions[piece.color] = move
-
-            # check for checks
-            if not self.in_check(piece.color):
+            if not self.move_causes_check(piece_position, move):
                 legal_moves.append(move)
-            
-            # return board to initial state
-            self.board[piece_position] = starting_square_piece
-            if target_square_piece is None:
-                del self.board[move]
-            else:
-                self.board[move] = target_square_piece
-            if isinstance(piece, King):
-                self.king_positions[piece.color] = piece_position
         
+        # add castles
+        if isinstance(piece, King):
+            king_row, king_col = piece_position
+            if self.can_castle(piece.color, kingside=True):
+                legal_moves.append((king_row, king_col + 2))
+            if self.can_castle(piece.color, kingside=False):
+                legal_moves.append((king_row, king_col - 2))
+
         return legal_moves
 
     def move(self, piece_position, target):
@@ -134,9 +172,23 @@ class Board:
         if not Piece.in_bounds(piece_position) or target not in legal_moves:
             raise ValueError("Not a legal move. Try again.")
         
-        self.board[target] = self.board[piece_position]
-        del self.board[piece_position]
+        piece = self.board.pop(piece_position)
+        self.board[target] = piece
 
+        # update king_positions and move rook if castle
+        if isinstance(piece, King):
+            self.king_positions[piece.color] = target
+            king_row, king_col = piece_position
+            if king_col - target[1] == -2:  # kingside
+                rook = self.board.pop((king_row, 7))
+                self.board[(king_row, 5)] = rook
+                rook.has_moved = True
+            elif king_col - target[1] == 2:  # queenside
+                rook = self.board.pop((king_row, 0))
+                self.board[(king_row, 3)] = rook
+                rook.has_moved = True
+
+        piece.has_moved = True
         self.ply += 1
     
     def algebraic_to_index(self, notation):
@@ -153,5 +205,3 @@ class Board:
             raise ValueError(f"Invalid notation: {notation}")
 
         return (rank_to_row[rank], file_to_col[file])
-
-        
