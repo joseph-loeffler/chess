@@ -1,0 +1,5 @@
+distlib==0.3.8
+filelock==3.14.0
+platformdirs==4.2.2
+pygame==2.6.1
+virtualenv==20.26.2

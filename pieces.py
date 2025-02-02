@@ -58,31 +58,31 @@ class Piece:
 class Rook(Piece):
     directions = [(0,1),(0,-1),(1, 0),(-1,0)]
     def valid_moves(self, piece_position, board_object):
-        return self.get_straight_line_moves(piece_position, board_object.board, self.directions)
+        return self.get_straight_line_moves(piece_position, board_object.piece_map, self.directions)
     
 
 class Bishop(Piece):
     directions = [(1,1),(1,-1),(-1,1),(-1,-1)]
     def valid_moves(self, piece_position, board_object):
-        return self.get_straight_line_moves(piece_position, board_object.board, self.directions)
+        return self.get_straight_line_moves(piece_position, board_object.piece_map, self.directions)
 
 
 class Queen(Piece):
     directions = [(0,1),(0,-1),(1, 0),(-1,0),(1,1),(1,-1),(-1,1),(-1,-1)]
     def valid_moves(self, piece_position, board_object):
-        return self.get_straight_line_moves(piece_position, board_object.board, self.directions)
+        return self.get_straight_line_moves(piece_position, board_object.piece_map, self.directions)
         
     
 class Knight(Piece):
     directions = [(1,2), (1,-2), (-1, 2), (-1,-2), (2,1), (2,-1), (-2,1), (-2,-1)]
     def valid_moves(self, piece_position, board_object):
-        return self.get_one_away_moves(piece_position, board_object.board, self.directions)
+        return self.get_one_away_moves(piece_position, board_object.piece_map, self.directions)
 
 
 class King(Piece):
     directions = [(0,1),(0,-1),(1, 0),(-1,0),(1,1),(1,-1),(-1,1),(-1,-1)]
     def valid_moves(self, piece_position, board_object):
-        return self.get_one_away_moves(piece_position, board_object.board, self.directions)
+        return self.get_one_away_moves(piece_position, board_object.piece_map, self.directions)
     
 
 class Pawn(Piece):
@@ -93,7 +93,7 @@ class Pawn(Piece):
     def valid_moves(self, piece_position, board_object):
         moves = []
         row, col = piece_position
-        board = board_object.board
+        board = board_object.piece_map
         # Moving forward (one or two) (if nothing blocking)
         direction = -1 if self.color == "white" else 1
         one_forward = (row + direction, col)

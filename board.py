@@ -2,7 +2,7 @@ from pieces import Piece, Rook, Bishop, Queen, Knight, King, Pawn
 
 class Board:
     def __init__(self, ply=0) -> None:
-        self.board = {}  # (row, col) -> Piece
+        self.piece_map = {}  # (row, col) -> Piece
         self.king_positions = {"white": None, "black": None}
         self.ply = ply
     
@@ -18,7 +18,7 @@ class Board:
             line = f"{row_label} "
 
             for col in col_range:
-                piece = self.board.get((row, col), ".")
+                piece = self.piece_map.get((row, col), ".")
                 line += str(piece) + " "
             print(line)
         
@@ -30,10 +30,10 @@ class Board:
         back_line = [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook]
 
         for col, piece_class in enumerate(back_line):
-            self.board[(0,col)] = piece_class("black")
-            self.board[(1,col)] = Pawn("black")
-            self.board[(7,col)] = piece_class("white")
-            self.board[(6,col)] = Pawn("white")
+            self.piece_map[(0,col)] = piece_class("black")
+            self.piece_map[(1,col)] = Pawn("black")
+            self.piece_map[(7,col)] = piece_class("white")
+            self.piece_map[(6,col)] = Pawn("white")
         
         self.king_positions["black"] = (0,4)
         self.king_positions["white"] = (7,4)
@@ -46,7 +46,7 @@ class Board:
                 row, col = curr_king_square
                 row += dr
                 col += dc
-                attacking_piece = self.board.get((row,col))
+                attacking_piece = self.piece_map.get((row,col))
                 if (isinstance(attacking_piece, piece_class)
                     and attacking_piece.color != color):
                     return True
@@ -56,12 +56,12 @@ class Board:
             row, col = curr_king_square
             row += dr
             col += dc
-            while (row,col) not in self.board and Piece.in_bounds((row,col)):
+            while (row,col) not in self.piece_map and Piece.in_bounds((row,col)):
                 row += dr
                 col += dc
-            if ((row,col) in self.board
-                and self.board[(row,col)].color != color
-                and isinstance(self.board[(row,col)], (Rook, Queen))):
+            if ((row,col) in self.piece_map
+                and self.piece_map[(row,col)].color != color
+                and isinstance(self.piece_map[(row,col)], (Rook, Queen))):
                 return True
         
         # Check diagonals
@@ -69,13 +69,13 @@ class Board:
             row, col = curr_king_square
             row += dr
             col += dc
-            while (row,col) not in self.board and Piece.in_bounds((row,col)):
+            while (row,col) not in self.piece_map and Piece.in_bounds((row,col)):
                 row += dr
                 col += dc
             
-            if ((row,col) in self.board 
-                and self.board[(row,col)].color != color
-                and isinstance(self.board[(row,col)], (Bishop, Queen))):
+            if ((row,col) in self.piece_map 
+                and self.piece_map[(row,col)].color != color
+                and isinstance(self.piece_map[(row,col)], (Bishop, Queen))):
                 return True
             
         # Check for pawns
@@ -84,7 +84,7 @@ class Board:
             row, col = curr_king_square
             row += dr
             col += dc
-            attacking_piece = self.board.get((row,col))
+            attacking_piece = self.piece_map.get((row,col))
             if (isinstance(attacking_piece, Pawn)
                 and attacking_piece.color != color):
                 return True
@@ -94,11 +94,11 @@ class Board:
     def move_causes_check(self, piece_position, target):
         in_check = False
         # store previous board state
-        piece = self.board.pop(piece_position)
-        target_square_piece = self.board.get(target)
+        piece = self.piece_map.pop(piece_position)
+        target_square_piece = self.piece_map.get(target)
         
         # modify board temporarily for simulation
-        self.board[target] = piece
+        self.piece_map[target] = piece
         if isinstance(piece, King):
             self.king_positions[piece.color] = target
 
@@ -107,11 +107,11 @@ class Board:
             in_check = True
         
         # return board to initial state
-        self.board[piece_position] = piece
+        self.piece_map[piece_position] = piece
         if target_square_piece is None:
-            del self.board[target]
+            del self.piece_map[target]
         else:
-            self.board[target] = target_square_piece
+            self.piece_map[target] = target_square_piece
         if isinstance(piece, King):
             self.king_positions[piece.color] = piece_position
 
@@ -120,36 +120,36 @@ class Board:
     def can_castle(self, color, kingside):
         """Returns True if castling (kingside or queenside) is legal for the given color."""
         king_pos = self.king_positions[color]
-        king = self.board[king_pos]
+        king = self.piece_map[king_pos]
         if king.has_moved or self.in_check(king.color):
             return False
         
         row = king_pos[0]
         rook_col = 7 if kingside else 0
-        rook = self.board.get((row, rook_col))
+        rook = self.piece_map.get((row, rook_col))
         
         if rook is None or rook.has_moved:
             return False
 
         path = [(row, col) for col in (range(5,7) if kingside else range(1,4))]
         for square in path:
-            if square in self.board or self.move_causes_check(king_pos, square):
+            if square in self.piece_map or self.move_causes_check(king_pos, square):
                 return False
         
         # Check if a knight is blocking queenside castle
         # as the above only checks the king's path
-        if not kingside and (7,1) in self.board:
+        if not kingside and (7,1) in self.piece_map:
             return False
         
         return True
 
     def get_legal_moves(self, piece_position):
-        if (piece_position not in self.board
-            or (self.ply % 2 == 0 and self.board[piece_position].color != "white")
-            or (self.ply % 2 == 1 and self.board[piece_position].color != "black")):
+        if (piece_position not in self.piece_map
+            or (self.ply % 2 == 0 and self.piece_map[piece_position].color != "white")
+            or (self.ply % 2 == 1 and self.piece_map[piece_position].color != "black")):
             return []
         
-        piece = self.board[piece_position]
+        piece = self.piece_map[piece_position]
         moves = piece.valid_moves(piece_position, self)
 
         legal_moves = []
@@ -172,20 +172,20 @@ class Board:
         if not Piece.in_bounds(piece_position) or target not in legal_moves:
             raise ValueError("Not a legal move. Try again.")
         
-        piece = self.board.pop(piece_position)
-        self.board[target] = piece
+        piece = self.piece_map.pop(piece_position)
+        self.piece_map[target] = piece
 
         # update king_positions and move rook if castle
         if isinstance(piece, King):
             self.king_positions[piece.color] = target
             king_row, king_col = piece_position
             if king_col - target[1] == -2:  # kingside
-                rook = self.board.pop((king_row, 7))
-                self.board[(king_row, 5)] = rook
+                rook = self.piece_map.pop((king_row, 7))
+                self.piece_map[(king_row, 5)] = rook
                 rook.has_moved = True
             elif king_col - target[1] == 2:  # queenside
-                rook = self.board.pop((king_row, 0))
-                self.board[(king_row, 3)] = rook
+                rook = self.piece_map.pop((king_row, 0))
+                self.piece_map[(king_row, 3)] = rook
                 rook.has_moved = True
 
         piece.has_moved = True
