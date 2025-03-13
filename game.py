@@ -31,7 +31,3 @@ class ChessGame:
 if __name__ == "__main__":
     game = ChessGame()
     game.newGame()
-    # print(game.board.board[(1,0)].color)
-    print(game.board.get_legal_moves((6,0)))
-    print(game.board.get_legal_moves((1,0)))
-    print(game.board.get_legal_moves((7,1)))

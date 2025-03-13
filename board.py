@@ -229,3 +229,6 @@ class Board:
             raise ValueError(f"Invalid notation: {notation}")
 
         return (rank_to_row[rank], file_to_col[file])
+
+if __name__ == "__main__":
+    pass
