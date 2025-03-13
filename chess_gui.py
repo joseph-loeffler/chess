@@ -59,7 +59,6 @@ class ChessGUI:
         YELLOW = (255, 255, 0)
         for row in range(8):
             for col in range(8):
-                print(self.selected_piece_pos)
                 color = (
                     YELLOW if self.selected_piece_pos == (col,row) 
                     else WHITE if (row + col) % 2 == 0
@@ -79,15 +78,37 @@ class ChessGUI:
         row, col = y // self.square_size, x // self.square_size
 
         if self.selected_piece_pos is None:  # 1st click
-            self.selected_piece_pos = (row, col)
+            if (row, col) in self.chess_board.piece_map:  # ignore blank selections
+                self.selected_piece_pos = (row, col)
         else:  # 2nd click
             target = (row, col)
+            piece = self.chess_board.piece_map[self.selected_piece_pos]
+            promotion_choice = None
+            if (piece.__class__.__name__ == "Pawn" 
+                and (self.selected_piece_pos[0] == 0 or self.selected_piece_pos[0] == 7)):
+                promotion_choice = self.promotion_promt(target, piece.color)
             try:
-                self.chess_board.move(self.selected_piece_pos, target)
+                self.chess_board.move(self.selected_piece_pos, target, promotion_choice)
             except ValueError as e:
                 print(e)
             
             self.selected_piece_pos = None
+    
+    def promotion_prompt(self, color):
+        """Displays a GUI popup for the player to choose a promotion piece."""
+        BUTTON_WIDTH, BUTTON_HEIGHT = 120, 50
+        SPACING = 10
+        BG_COLOR = (30, 30, 30)
+        BUTTON_COLOR = (200, 200, 200)
+
+        options = {"Q": Queen, "R": Rook, "B": Bishop, "N": Knight}
+
+        menu_x = (self.width - len(options) * (BUTTON_WIDTH + SPACING))
+        menu_y = self.height // 2
+
+        font = pygame.font.Font(None, 36)
+        text_surface = font.render("Choose Promotion Piece:", True, "white")
+        self.screen.blit(text_surface, (menu_x + 60, menu_y - 40))
 
     def handle_resize(self, new_width, new_height):
         """Handles dynamic resizing of the board."""

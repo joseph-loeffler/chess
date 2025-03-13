@@ -116,7 +116,7 @@ class Pawn(Piece):
                 and board[side_pawn_pos].color != self.color
                 and isinstance(board[side_pawn_pos], Pawn)
                 and board[side_pawn_pos].moved_two_ply == board_object.ply - 1):
-                
+                print("en passant is legal")
                 moves.append(diagonal_move)
         
         return moves

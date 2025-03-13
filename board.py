@@ -155,7 +155,12 @@ class Board:
         legal_moves = []
         for move in moves:
             if not self.move_causes_check(piece_position, move):
-                legal_moves.append(move)
+                # Handle pawn promotion
+                if isinstance(piece, Pawn) and (move[0] == 0 or move[0] == 7):
+                    for promo_piece in [Queen, Knight, Rook, Bishop]:
+                        legal_moves.append((move, promo_piece))
+                else:
+                    legal_moves.append(move)
         
         # add castles
         if isinstance(piece, King):
@@ -167,13 +172,18 @@ class Board:
 
         return legal_moves
 
-    def move(self, piece_position, target):
+    def move(self, piece_position, target, promotion_choice=None):
         legal_moves = self.get_legal_moves(piece_position)
-        if not Piece.in_bounds(piece_position) or target not in legal_moves:
+        if (not Piece.in_bounds(piece_position) 
+            or target not in {move if isinstance(move[0], int) else move[0] for move in legal_moves}):
             raise ValueError("Not a legal move. Try again.")
         
         piece = self.piece_map.pop(piece_position)
         self.piece_map[target] = piece
+
+        # handle promotion
+        if promotion_choice:
+            self.piece_map[target] = promotion_choice(piece.color, has_moved=True)
 
         # update king_positions and move rook if castle
         if isinstance(piece, King):
