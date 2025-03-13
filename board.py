@@ -185,6 +185,17 @@ class Board:
         if promotion_choice:
             self.piece_map[target] = promotion_choice(piece.color, has_moved=True)
 
+        # remove the taken piece for en passant
+        opp_pawn_pos = (piece_position[0], target[1])
+        if (isinstance(piece, Pawn)
+            and abs(piece_position[0] - target[0]) == abs(piece_position[1] - target[1]) == 1 #diag move
+            and opp_pawn_pos in self.piece_map
+            and isinstance(self.piece_map[opp_pawn_pos], Pawn)
+            and self.piece_map[opp_pawn_pos].color != self.piece_map[target].color):
+            
+            del self.piece_map[opp_pawn_pos]
+            
+
         # update king_positions and move rook if castle
         if isinstance(piece, King):
             self.king_positions[piece.color] = target
@@ -197,7 +208,10 @@ class Board:
                 rook = self.piece_map.pop((king_row, 0))
                 self.piece_map[(king_row, 3)] = rook
                 rook.has_moved = True
-
+                
+        # update pawn if moved two
+        if isinstance(piece, Pawn) and abs(piece_position[0] - target[0]) == 2:
+            piece.moved_two_ply = self.ply
         piece.has_moved = True
         self.ply += 1
     
