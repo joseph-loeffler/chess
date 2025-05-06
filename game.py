@@ -23,8 +23,6 @@ class ChessGame:
                     print(e)
             
             print()
-
-
             
 
 

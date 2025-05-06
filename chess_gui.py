@@ -5,6 +5,7 @@ import os
 import cairosvg
 from io import BytesIO
 from board import Board
+from pieces import Queen, Rook, Bishop, Knight
 
 class ChessGUI:
     def __init__(self, width=600, height=600):
@@ -84,31 +85,114 @@ class ChessGUI:
             target = (row, col)
             piece = self.chess_board.piece_map[self.selected_piece_pos]
             promotion_choice = None
-            if (piece.__class__.__name__ == "Pawn" 
-                and (self.selected_piece_pos[0] == 0 or self.selected_piece_pos[0] == 7)):
-                promotion_choice = self.promotion_promt(target, piece.color)
+            if piece.__class__.__name__ == "Pawn" and (target[0] == 0 or target[0] == 7):
+                promotion_choice = self.promotion_prompt(piece.color)
             try:
                 self.chess_board.move(self.selected_piece_pos, target, promotion_choice)
             except ValueError as e:
                 print(e)
             
             self.selected_piece_pos = None
+
+            # after 2nd click, check for end-of-game
+
+            # Force visual update before checking end conditions
+            self.draw_board()
+            self.draw_pieces()
+            pygame.display.flip()
+
+            opp_color = "white" if piece.color == "black" else "black"
+            if self.chess_board.inCheckmate(opp_color):
+                self.show_end_message(f"{piece.color.capitalize()} wins!")
+            elif self.chess_board.isDraw():
+                self.show_end_message("Draw!")
+    
+    def show_end_message(self, message: str):
+        """Displays a popup message and waits for user to close or click to continue."""
+        font = pygame.font.Font(None, 72)
+        text = font.render(message, True, (255, 255, 255))
+        text_rect = text.get_rect(center=(self.width // 2, self.height // 2))
+        
+        overlay = pygame.Surface((self.width, self.height))
+        overlay.set_alpha(200)
+        overlay.fill((0, 0, 0))
+
+        self.screen.blit(overlay, (0, 0))
+        self.screen.blit(text, text_rect)
+        pygame.display.flip()
+
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    exit()
+                elif event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.KEYDOWN:
+                    waiting = False
     
     def promotion_prompt(self, color):
-        """Displays a GUI popup for the player to choose a promotion piece."""
-        BUTTON_WIDTH, BUTTON_HEIGHT = 120, 50
-        SPACING = 10
+        """Displays a GUI popup and waits for the player to choose a promotion piece."""
+        BUTTON_WIDTH, BUTTON_HEIGHT = 100, 50
+        SPACING = 20
         BG_COLOR = (30, 30, 30)
         BUTTON_COLOR = (200, 200, 200)
+        TEXT_COLOR = (0, 0, 0)
 
-        options = {"Q": Queen, "R": Rook, "B": Bishop, "N": Knight}
+        options = {
+            "Q": Queen,
+            "R": Rook,
+            "B": Bishop,
+            "N": Knight,
+        }
 
-        menu_x = (self.width - len(options) * (BUTTON_WIDTH + SPACING))
-        menu_y = self.height // 2
+        # Create a semi-transparent overlay
+        overlay = pygame.Surface((self.width, self.height))
+        overlay.set_alpha(220)
+        overlay.fill(BG_COLOR)
+        self.screen.blit(overlay, (0, 0))
 
+        # Draw title
+        font = pygame.font.Font(None, 48)
+        label = font.render("Choose Promotion Piece:", True, "white")
+        label_rect = label.get_rect(center=(self.width // 2, self.height // 2 - 100))
+        self.screen.blit(label, label_rect)
+
+        # Draw buttons
         font = pygame.font.Font(None, 36)
-        text_surface = font.render("Choose Promotion Piece:", True, "white")
-        self.screen.blit(text_surface, (menu_x + 60, menu_y - 40))
+        keys = list(options.keys())
+        total_width = len(keys) * BUTTON_WIDTH + (len(keys) - 1) * SPACING
+        start_x = (self.width - total_width) // 2
+        y = self.height // 2
+
+        button_rects = {}
+
+        for i, key in enumerate(keys):
+            x = start_x + i * (BUTTON_WIDTH + SPACING)
+            rect = pygame.Rect(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
+            pygame.draw.rect(self.screen, BUTTON_COLOR, rect)
+            text = font.render(key, True, TEXT_COLOR)
+            text_rect = text.get_rect(center=rect.center)
+            self.screen.blit(text, text_rect)
+            button_rects[key] = rect
+
+        pygame.display.flip()
+
+        # Wait for valid input
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    exit()
+                elif event.type == pygame.KEYDOWN:
+                    key = pygame.key.name(event.key).upper()
+                    if key in options:
+                        return options[key]
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    x, y = pygame.mouse.get_pos()
+                    for key, rect in button_rects.items():
+                        if rect.collidepoint(x, y):
+                            return options[key]
 
     def handle_resize(self, new_width, new_height):
         """Handles dynamic resizing of the board."""
