@@ -79,13 +79,19 @@ class ChessGUI:
         row, col = y // self.square_size, x // self.square_size
 
         if self.selected_piece_pos is None:  # 1st click
-            if (row, col) in self.chess_board.piece_map:  # ignore blank selections
+            # Ignore blank selections and opposite color selections
+            current_color = "white" if self.chess_board.ply % 2 == 0 else "black"
+            if ((row, col) in self.chess_board.piece_map 
+                and self.chess_board.piece_map[(row, col)].color == current_color): 
                 self.selected_piece_pos = (row, col)
         else:  # 2nd click
             target = (row, col)
             piece = self.chess_board.piece_map[self.selected_piece_pos]
             promotion_choice = None
-            if piece.__class__.__name__ == "Pawn" and (target[0] == 0 or target[0] == 7):
+            promotion_row = 0 if self.chess_board.ply % 2 == 0 else 7
+            if (piece.__class__.__name__ == "Pawn" 
+                and target[0] == promotion_row
+                and abs(self.selected_piece_pos[0] - promotion_row) == 1):
                 promotion_choice = self.promotion_prompt(piece.color)
             try:
                 self.chess_board.move(self.selected_piece_pos, target, promotion_choice)

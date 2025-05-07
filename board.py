@@ -5,7 +5,9 @@ class Board:
         self.piece_map: dict[tuple[int, int]: Piece] = {}  # (row, col) -> Piece
         self.king_positions = {"white": None, "black": None}
         self.ply = ply
+        self.time_since_capture = 0
         self.legal_moves: dict[tuple: list[tuple]] = {}
+        self.position_history: dict[str, int] = {}
     
     def display(self, player_color="white"):
         """Prints the board with the player's color at the bottom."""
@@ -40,6 +42,7 @@ class Board:
         self.king_positions["white"] = (7,4)
 
         self.update_legal_moves()
+        self.record_position()
 
     def in_check(self, color: str) -> bool:
         """Returns True if the king of the given color is in check."""
@@ -174,6 +177,12 @@ class Board:
             raise ValueError("Not a legal move. Try again.")
         
         piece = self.piece_map.pop(piece_position)
+
+        # if capture or pawn move, reset counter
+        if target in self.piece_map or isinstance(piece, Pawn):
+            self.time_since_capture = 0
+        
+        # move the piece
         self.piece_map[target] = piece
 
         # handle promotion
@@ -210,7 +219,11 @@ class Board:
         piece.has_moved = True
 
         self.ply += 1
+        self.time_since_capture += 1
+        if isinstance(piece, Pawn):
+            self.position_history = {}  # after pawn move, other positions will never be seen
         self.update_legal_moves()
+        self.record_position()
     
     def algebraic_to_index(self, notation: str) -> tuple[int, int]:
         """Converts standard chess notation (e.g., 'e4') to board coordinates (row, col)."""
@@ -229,19 +242,67 @@ class Board:
     
     def inCheckmate(self, color: str) -> bool:
         """Returns true if color is in checkmate"""
-        if self.in_check(color) and len(self.legal_moves[self.king_positions[color]]) == 0:
+        if self.in_check(color) and all(not moves for moves in self.legal_moves.values()):
             return True
         return False
     
     def isDraw(self):
-        """Returns true if the current player has no legal moves
-        or if any of the other draw conditions have been met"""
+        """Returns true if the game is a draw"""
         curr_color = "white" if self.ply % 2 == 0 else "black"
+        # Stalemate
         if (all(not moves for moves in self.legal_moves.values()) 
             and not self.in_check(curr_color)):
             return True
-        # TODO: 50 moves, insufficient material, 3/5 move rule, etc.
+        
+        # Threefold repetition
+        if self.position_history[self.compute_position_key()] >= 3:
+            return True
+
+        # 50-move rule
+        if self.time_since_capture >= 100:
+            return True
+
+        # Insufficient material
+        pieces = list(self.piece_map.values())
+        if all(isinstance(p, (King, Bishop, Knight)) for p in pieces):
+            if len(pieces) <= 3:
+                # King vs King or King and Bishop/Knight vs King
+                return True
+            if len(pieces) == 4:
+                # King and bishop vs king and bishop (same color bishops)
+                bishops = [p for p in pieces if isinstance(p, Bishop)]
+                if len(bishops) == 2:
+                    bishop_squares = [pos for pos, p in self.piece_map.items() if isinstance(p, Bishop)]
+                    same_color = lambda square: (square[0] + square[1]) % 2
+                    if same_color(bishop_squares[0]) == same_color(bishop_squares[1]):
+                        return True
+
         return False
+    
+    def record_position(self):
+        key = self.compute_position_key()
+        self.position_history[key] = self.position_history.get(key, 0) + 1
+
+    def compute_position_key(self) -> str:
+        pieces = []
+        for pos in sorted(self.piece_map.keys()):
+            piece = self.piece_map[pos]
+            pieces.append(f"{piece.color[0]}{type(piece).__name__[0]}{pos[0]}{pos[1]}")
+        castling_rights = []
+        for color in ["white", "black"]:
+            row = 7 if color == "white" else 0
+            if isinstance(self.piece_map.get((row, 0)), Rook) and not self.piece_map[(row, 0)].has_moved:
+                castling_rights.append(f"{color[0]}Q")
+            if isinstance(self.piece_map.get((row, 7)), Rook) and not self.piece_map[(row, 7)].has_moved:
+                castling_rights.append(f"{color[0]}K")
+        king_moved = ''.join(f"{color[0]}Km" for color in ["white", "black"] if self.piece_map.get(self.king_positions[color], None) and self.piece_map[self.king_positions[color]].has_moved)
+        return '|'.join([
+            ''.join(pieces),
+            ''.join(castling_rights),
+            king_moved,
+            str(self.ply % 2)
+        ])
+
 
 if __name__ == "__main__":
     pass
