@@ -1,12 +1,14 @@
 from pieces import Piece, Rook, Bishop, Queen, Knight, King, Pawn
+from typing import Generator
+import copy
 
 class Board:
-    def __init__(self, ply=0) -> None:
+    def __init__(self) -> None:
         self.piece_map: dict[tuple[int, int]: Piece] = {}  # (row, col) -> Piece
         self.king_positions = {"white": None, "black": None}
-        self.ply = ply
+        self.ply = 0
         self.time_since_capture = 0
-        self.legal_moves: dict[tuple: list[tuple]] = {}
+        self.legal_moves: dict[tuple: list[tuple]] = {}  # pos: (target, promo)
         self.position_history: dict[str, int] = {}
     
     def display(self, player_color="white"):
@@ -47,21 +49,7 @@ class Board:
     def in_check(self, color: str) -> bool:
         """Returns True if the king of the given color is in check."""
         return self._in_check_static(self.piece_map, self.king_positions, color)
-
-    def move_causes_check(self, piece_position: tuple[int, int], target: tuple[int, int]) -> bool:
-        """Returns True if moving a piece to the target would place its own king in check."""
-        piece = self.piece_map[piece_position]
-        simulated_map = self.piece_map.copy()
-        simulated_king_positions = self.king_positions.copy()
-
-        simulated_map.pop(piece_position)
-        simulated_map[target] = piece
-
-        if isinstance(piece, King):
-            simulated_king_positions[piece.color] = target
-
-        return self._in_check_static(simulated_map, simulated_king_positions, piece.color)
-
+    
     @staticmethod
     def _in_check_static(piece_map, king_positions, color: str) -> bool:
         """Determines whether the king of the specified color is in check given a board state."""
@@ -114,6 +102,20 @@ class Board:
 
         return False
 
+    def move_causes_check(self, piece_position: tuple[int, int], target: tuple[int, int]) -> bool:
+        """Returns True if moving a piece to the target would place its own king in check."""
+        piece = self.piece_map[piece_position]
+        simulated_map = self.piece_map.copy()
+        simulated_king_positions = self.king_positions.copy()
+
+        simulated_map.pop(piece_position)
+        simulated_map[target] = piece
+
+        if isinstance(piece, King):
+            simulated_king_positions[piece.color] = target
+
+        return self._in_check_static(simulated_map, simulated_king_positions, piece.color)
+
     def can_castle(self, color: str, kingside: bool) -> bool:
         """Returns True if castling (kingside or queenside) is legal for the given color."""
         king_pos = self.king_positions[color]
@@ -148,32 +150,32 @@ class Board:
                 continue
             self.legal_moves[pos] = []
             moves = piece.valid_moves(pos, self)
-            for move in moves:
-                if not self.move_causes_check(pos, move):
+            for target, _ in moves:
+                if not self.move_causes_check(pos, target):
                     # Handle pawn promotion
-                    if isinstance(piece, Pawn) and (move[0] == 0 or move[0] == 7):
+                    if isinstance(piece, Pawn) and (target[0] == 0 or target[0] == 7):
                         for promo_piece in [Queen, Knight, Rook, Bishop]:
-                            self.legal_moves[pos].append((move, promo_piece))
+                            self.legal_moves[pos].append((target, promo_piece))
                     else:
-                        self.legal_moves[pos].append(move)
+                        self.legal_moves[pos].append((target, None))
             
             # add castles
             if isinstance(piece, King):
                 king_row, king_col = pos
                 if self.can_castle(piece.color, kingside=True):
-                    self.legal_moves[pos].append((king_row, king_col + 2))
+                    self.legal_moves[pos].append(((king_row, king_col + 2), None))
                 if self.can_castle(piece.color, kingside=False):
-                    self.legal_moves[pos].append((king_row, king_col - 2))
+                    self.legal_moves[pos].append(((king_row, king_col - 2), None))
 
     def move(self, piece_position: tuple, target: tuple, promotion_choice: Piece=None):
         """Moves a piece from piece_position to target, handling promotion, castling, en passant,
         and updating game state (ply and legal_moves). Raises ValueError if the move is illegal."""
-        if piece_position not in self.legal_moves:
+        if (piece_position) not in self.legal_moves:
             raise ValueError("Not a legal move. Try again.")
 
         legal_moves = self.legal_moves[piece_position]
         if (not Piece.in_bounds(piece_position) 
-            or target not in {move if isinstance(move[0], int) else move[0] for move in legal_moves}):
+            or target not in {move[0] for move in legal_moves}):
             raise ValueError("Not a legal move. Try again.")
         
         piece = self.piece_map.pop(piece_position)
@@ -240,13 +242,13 @@ class Board:
 
         return (rank_to_row[rank], file_to_col[file])
     
-    def inCheckmate(self, color: str) -> bool:
+    def in_checkmate(self, color: str) -> bool:
         """Returns true if color is in checkmate"""
         if self.in_check(color) and all(not moves for moves in self.legal_moves.values()):
             return True
         return False
     
-    def isDraw(self):
+    def is_draw(self):
         """Returns true if the game is a draw"""
         curr_color = "white" if self.ply % 2 == 0 else "black"
         # Stalemate
@@ -302,7 +304,34 @@ class Board:
             king_moved,
             str(self.ply % 2)
         ])
+    
+    def generate_successor_state(self, pos, target, promo_choice=None):
+        # TODO: target sometimes comes in as a ((x,y), promo) tuple
+        # Fix: I think just rewrite all the code so that moves are (pos,target,promo) triples
+        # mosttly with promo=None
+        newState = Board()
 
+        # Copy over data
+        newState.piece_map = copy.deepcopy(self.piece_map)
+        newState.king_positions = copy.deepcopy(self.king_positions)
+        newState.ply = self.ply
+        newState.time_since_capture = self.time_since_capture
+        newState.position_history = copy.deepcopy(self.position_history)
+
+        # Assume move is legal and set legal_moves to include move 
+        # (so we don't need to compute legal_moves 2x)
+        newState.legal_moves = {pos: [(target, promo_choice)]}
+
+        # Make move
+        newState.move(pos, target, promo_choice)
+
+        return newState
+    
+    def get_all_legal_moves(self) -> Generator:
+        """Yields (start_pos, target_pos, promotion_choice) for all legal moves."""
+        for pos, moves in self.legal_moves.items():
+            for target, promo in moves:
+                yield (pos, target, promo)
 
 if __name__ == "__main__":
     pass

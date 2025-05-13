@@ -5,10 +5,13 @@ import os
 import cairosvg
 from io import BytesIO
 from board import Board
+from ai import ChessAI
 from pieces import Queen, Rook, Bishop, Knight
 
+MAX_DEPTH = 3
+
 class ChessGUI:
-    def __init__(self, width=600, height=600):
+    def __init__(self, width=600, height=600, ai_color=None):
         pygame.init()
 
         self.width = width
@@ -24,6 +27,10 @@ class ChessGUI:
         self.chess_board = Board()
         self.chess_board.initial_setup()
         self.selected_piece_pos = None
+        self.ai_color = ai_color
+        self.ai = None
+        if self.ai_color is not None:
+            self.ai = ChessAI(max_depth=MAX_DEPTH)
 
     def update_board_size(self):
         """Updates square size dynamically when the window is resized."""
@@ -108,9 +115,9 @@ class ChessGUI:
             pygame.display.flip()
 
             opp_color = "white" if piece.color == "black" else "black"
-            if self.chess_board.inCheckmate(opp_color):
+            if self.chess_board.in_checkmate(opp_color):
                 self.show_end_message(f"{piece.color.capitalize()} wins!")
-            elif self.chess_board.isDraw():
+            elif self.chess_board.is_draw():
                 self.show_end_message("Draw!")
     
     def show_end_message(self, message: str):
@@ -224,10 +231,31 @@ class ChessGUI:
                     self.handle_click(x, y)
                 elif event.type == pygame.VIDEORESIZE:
                     self.handle_resize(event.w, event.h)
+
+            # Let the AI move if it's their turn
+            if self.ai is not None and (
+                (self.ai_color == "white" and self.chess_board.ply % 2 == 0)
+                or (self.ai_color == "black" and self.chess_board.ply % 2 == 1)
+                ):
+                move = self.ai.choose_move(self.chess_board)
+                if move:
+                    self.chess_board.move(*move)
+
+                    # Force visual update after AI move
+                    self.draw_board()
+                    self.draw_pieces()
+                    pygame.display.flip()
+
+                    opp_color = "white" if self.ai_color == "black" else "black"
+                    if self.chess_board.in_checkmate(opp_color):
+                        self.show_end_message(f"{self.ai_color.capitalize()} wins!")
+                    elif self.chess_board.is_draw():
+                        self.show_end_message("Draw!")
+
         
         pygame.quit()
 
 
 if __name__ == "__main__":
-    gui = ChessGUI()
+    gui = ChessGUI(ai_color=input("AI color: "))
     gui.run()
