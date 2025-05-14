@@ -1,4 +1,3 @@
-import random
 from board import Board
 
 class ChessAI:

@@ -8,7 +8,7 @@ from board import Board
 from ai import ChessAI
 from pieces import Queen, Rook, Bishop, Knight
 
-MAX_DEPTH = 3
+MAX_DEPTH = 2
 
 class ChessGUI:
     def __init__(self, width=600, height=600, ai_color=None):

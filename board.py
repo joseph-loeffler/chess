@@ -306,9 +306,6 @@ class Board:
         ])
     
     def generate_successor_state(self, pos, target, promo_choice=None):
-        # TODO: target sometimes comes in as a ((x,y), promo) tuple
-        # Fix: I think just rewrite all the code so that moves are (pos,target,promo) triples
-        # mosttly with promo=None
         newState = Board()
 
         # Copy over data
