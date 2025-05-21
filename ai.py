@@ -20,8 +20,6 @@ class ChessAI:
                 return self.state_eval(gameState)
 
             maxV = float("-inf")
-            before_move_key = gameState.compute_position_key()
-            before_move_vis = gameState.get_board_visual()
             for action in [first_move, *moves]:
                 # Get arguments for undoing the action later
                 undo_arguments = [*action]
@@ -34,16 +32,11 @@ class ChessAI:
                     undo_arguments += capture_details
 
                 # Make the move and evaluate it
-                log_debug(f"[depth={depth}] MOVE: {action}, Key before: {before_move_key}")
                 gameState.move(action)
                 maxV = max(maxV, minVal(gameState, alpha, beta, depth))
 
                 # Return board to prev state by undoing the move
                 gameState.undo_move(*undo_arguments)
-                after_undo_key = gameState.compute_position_key()
-                after_undo_vis = gameState.get_board_visual()
-                log_debug(f"[depth={depth}] UNDO: {action}, Key after: {after_undo_key}")
-                assert before_move_key == after_undo_key, f"Undo failed at depth={depth}, ply={gameState.ply}. Keys: {before_move_key} != {after_undo_key}.\nBefore:\n{before_move_vis}\n\nAfter:\n{after_undo_vis}"
 
                 if maxV >= beta:
                     return maxV
@@ -61,8 +54,6 @@ class ChessAI:
                 return self.state_eval(gameState)
 
             minV = float("inf")
-            before_move_key = gameState.compute_position_key()
-            before_move_vis = gameState.get_board_visual()
             for action in [first_move, *moves]:
                 # Get arguments for undoing the action later
                 undo_arguments = [*action]
@@ -75,24 +66,11 @@ class ChessAI:
                     undo_arguments += capture_details
 
                 # Make the move and evaluate it
-                log_debug(f"[depth={depth}] MOVE: {action}, Key before: {before_move_key}")
                 gameState.move(action)
-                current_vis = gameState.get_board_visual()
                 minV = min(minV, maxVal(gameState, alpha, beta, depth + 1))
 
                 # Return board to prev state by undoing the move
                 gameState.undo_move(*undo_arguments)
-                after_undo_key = gameState.compute_position_key()
-                after_undo_vis = gameState.get_board_visual()
-                log_debug(f"[depth={depth}] UNDO: {action}, Key after: {after_undo_key}")
-                assert before_move_key == after_undo_key, (
-                    f"Undo failed at depth={depth}, ply={gameState.ply}. "
-                    f"Keys: {before_move_key} != {after_undo_key}.\n"
-                    f"Before:\n{before_move_vis}\n\n"
-                    f"Move: {action}\n\n"
-                    f"After move (before undo):\n{current_vis}\n\n"
-                    f"After undo:\n{after_undo_vis}"
-                )
 
                 if minV <= alpha:
                     return minV
@@ -114,24 +92,9 @@ class ChessAI:
                 capture_details = gameState.get_capture_details(move)
                 undo_arguments += capture_details
 
-            before_move_key = gameState.compute_position_key()
-            before_move_vis = gameState.get_board_visual()
-            log_debug(f"[depth=0] MOVE: {move}, Key before: {before_move_key}")
             gameState.move(move)
-            current_vis = gameState.get_board_visual()
             val = minVal(gameState, alpha, beta, depth=1)
             gameState.undo_move(*undo_arguments)
-            after_undo_key = gameState.compute_position_key()
-            after_undo_vis = gameState.get_board_visual()
-            log_debug(f"[depth=0] UNDO: {move}, Key after: {after_undo_key}")
-            assert before_move_key == after_undo_key, (
-                f"Undo failed at depth=0, ply={gameState.ply}. "
-                f"Keys: {before_move_key} != {after_undo_key}.\n"
-                f"Before:\n{before_move_vis}\n\n"
-                f"Move: {move}\n\n"
-                f"After move (before undo):\n{current_vis}\n\n"
-                f"After undo:\n{after_undo_vis}"
-            )
 
             if val >= bestVal:
                 bestVal = val

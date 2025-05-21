@@ -254,15 +254,7 @@ class Board:
     def undo_move(self, position: tuple, target: tuple, promo: Piece, was_first_move: bool, 
                   captured_piece: Piece|None=None, captured_piece_pos: tuple|None=None, prev_time_since_capture: int|None=None):
         prev_board_key = self.compute_position_key()
-        if prev_board_key not in self.position_history:
-            if prev_board_key not in self.position_history:
-                log_debug("[ERROR] undo_move failed: key not found in position history")
-                self.display()
-                log_debug(f"Missing key: {prev_board_key}")
-                log_debug(f"All keys: {list(self.position_history.keys())}")
-                raise KeyError(prev_board_key)
         if self.position_history[prev_board_key] <= 1:
-            log_debug(f"deleting position {prev_board_key}")
             del self.position_history[prev_board_key]
         else:
             self.position_history[prev_board_key] -= 1
@@ -359,7 +351,6 @@ class Board:
     
     def record_position(self):
         key = self.compute_position_key()
-        log_debug(f"Recording key: {key}")
         self.position_history[key] = self.position_history.get(key, 0) + 1
 
     def compute_position_key(self) -> str:
