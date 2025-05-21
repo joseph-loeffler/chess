@@ -1,14 +1,21 @@
 from pieces import Piece, Rook, Bishop, Queen, Knight, King, Pawn
-from typing import Generator
-import copy
+from collections.abc import Generator
+from datetime import datetime
+
+LOG_FILE = "debug_log.txt"
+
+def log_debug(message: str):
+    with open(LOG_FILE, "a") as f:
+        timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        f.write(f"{timestamp} {message}\n")
 
 class Board:
     def __init__(self) -> None:
-        self.piece_map: dict[tuple[int, int]: Piece] = {}  # (row, col) -> Piece
+        self.piece_map: dict[tuple[int, int], Piece] = {}  # (row, col) -> Piece
         self.king_positions = {"white": None, "black": None}
         self.ply = 0
         self.time_since_capture = 0
-        self.legal_moves: dict[tuple: list[tuple]] = {}  # pos: (target, promo)
+        self.legal_moves: dict[tuple, list] = {}  # pos: (target, promo)
         self.position_history: dict[str, int] = {}
     
     def display(self, player_color="white"):
@@ -30,6 +37,28 @@ class Board:
         col_labels = "  a b c d e f g h" if not flipped else "  h g f e d c b a"
         print(col_labels)
         print()
+
+    def get_board_visual(self, player_color="white") -> str:
+        """Returns the board as a string with the player's color at the bottom."""
+        flipped = player_color == "black"
+
+        row_range = range(8) if not flipped else range(7, -1, -1)
+        col_range = range(8) if not flipped else range(7, -1, -1)
+
+        lines = []
+        for row in row_range:
+            row_label = 8 - row if not flipped else row + 1
+            line = f"{row_label} "
+
+            for col in col_range:
+                piece = self.piece_map.get((row, col), ".")
+                line += str(piece) + " "
+            lines.append(line)
+
+        col_labels = "  a b c d e f g h" if not flipped else "  h g f e d c b a"
+        lines.append(col_labels)
+        lines.append("")
+        return "\n".join(lines)
     
     def initial_setup(self):
         back_line = [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook]
@@ -167,18 +196,26 @@ class Board:
                 if self.can_castle(piece.color, kingside=False):
                     self.legal_moves[pos].append(((king_row, king_col - 2), None))
 
-    def move(self, piece_position: tuple, target: tuple, promotion_choice: Piece=None):
+    def move(self, action):
         """Moves a piece from piece_position to target, handling promotion, castling, en passant,
         and updating game state (ply and legal_moves). Raises ValueError if the move is illegal."""
-        if (piece_position) not in self.legal_moves:
-            raise ValueError("Not a legal move. Try again.")
+        position, target, promo = action
+        if position not in self.legal_moves:
+            self.display()
+            raise ValueError(f"No legal moves for the piece on {position}. Try again")
 
-        legal_moves = self.legal_moves[piece_position]
-        if (not Piece.in_bounds(piece_position) 
+        legal_moves = self.legal_moves[position]
+        if (not Piece.in_bounds(position) 
             or target not in {move[0] for move in legal_moves}):
-            raise ValueError("Not a legal move. Try again.")
+            self.display()
+            raise ValueError(f"{target} is not a legal move for the piece at {position}. Try again.")
+
+        # remove the taken piece for en passant (done before getting piece bc helper depends on piece being at pos)
+        opp_pawn_pos = (position[0], target[1])
+        if self.is_en_passant(action):
+            del self.piece_map[opp_pawn_pos]
         
-        piece = self.piece_map.pop(piece_position)
+        piece = self.piece_map.pop(position)
 
         # if capture or pawn move, reset counter
         if target in self.piece_map or isinstance(piece, Pawn):
@@ -188,24 +225,13 @@ class Board:
         self.piece_map[target] = piece
 
         # handle promotion
-        if promotion_choice is not None:
-            self.piece_map[target] = promotion_choice(piece.color, has_moved=True)
-
-        # remove the taken piece for en passant
-        opp_pawn_pos = (piece_position[0], target[1])
-        if (isinstance(piece, Pawn)
-            and abs(piece_position[0] - target[0]) == abs(piece_position[1] - target[1]) == 1 #diag move
-            and opp_pawn_pos in self.piece_map
-            and isinstance(self.piece_map[opp_pawn_pos], Pawn)
-            and self.piece_map[opp_pawn_pos].color != self.piece_map[target].color):
-            
-            del self.piece_map[opp_pawn_pos]
-            
+        if promo is not None:
+            self.piece_map[target] = promo(piece.color, has_moved=True)
 
         # update king_positions and move rook if castle
         if isinstance(piece, King):
             self.king_positions[piece.color] = target
-            king_row, king_col = piece_position
+            king_row, king_col = position
             if king_col - target[1] == -2:  # kingside
                 rook = self.piece_map.pop((king_row, 7))
                 self.piece_map[(king_row, 5)] = rook
@@ -216,16 +242,66 @@ class Board:
                 rook.has_moved = True
                 
         # update pawn if moved two
-        if isinstance(piece, Pawn) and abs(piece_position[0] - target[0]) == 2:
+        if isinstance(piece, Pawn) and abs(position[0] - target[0]) == 2:
             piece.moved_two_ply = self.ply
         piece.has_moved = True
 
         self.ply += 1
         self.time_since_capture += 1
-        if isinstance(piece, Pawn):
-            self.position_history = {}  # after pawn move, other positions will never be seen
         self.update_legal_moves()
         self.record_position()
+
+    def undo_move(self, position: tuple, target: tuple, promo: Piece, was_first_move: bool, 
+                  captured_piece: Piece|None=None, captured_piece_pos: tuple|None=None, prev_time_since_capture: int|None=None):
+        prev_board_key = self.compute_position_key()
+        if prev_board_key not in self.position_history:
+            if prev_board_key not in self.position_history:
+                log_debug("[ERROR] undo_move failed: key not found in position history")
+                self.display()
+                log_debug(f"Missing key: {prev_board_key}")
+                log_debug(f"All keys: {list(self.position_history.keys())}")
+                raise KeyError(prev_board_key)
+        if self.position_history[prev_board_key] <= 1:
+            log_debug(f"deleting position {prev_board_key}")
+            del self.position_history[prev_board_key]
+        else:
+            self.position_history[prev_board_key] -= 1
+        
+
+        piece = self.piece_map.pop(target)
+        
+        if promo is not None:
+            piece = Pawn(piece.color, has_moved=True)
+            piece.moved_two_ply = self.ply - 4  # a bit arbitrary. Enough so it's not the prev move
+        if isinstance(piece, King):
+            self.king_positions[piece.color] = position
+
+            # Castling
+            if abs(position[1] - target[1]) > 1:
+                if target[1] == 2:  # queenside
+                    rook = self.piece_map.pop((position[0], 3))  # the rook is on the backrank of the d column
+                    rook.has_moved = False
+                    self.piece_map[(position[0], 0)] = rook
+                else:  # kingside
+                    rook = self.piece_map.pop((position[0], 5))  # the rook is on the backrank of the f column
+                    rook.has_moved = False
+                    self.piece_map[(position[0], 7)] = rook
+        
+        self.piece_map[position] = piece
+        if was_first_move:
+            piece.has_moved = False
+            # If pawn moved two spaces
+            if isinstance(piece, Pawn) and abs(position[0] - target[0]) == 2:
+                piece.moved_two_ply = -1
+        
+        if captured_piece is not None:
+            self.piece_map[captured_piece_pos] = captured_piece
+            self.time_since_capture = prev_time_since_capture
+        else:
+            self.time_since_capture -= 1
+            
+        self.ply -= 1
+        self.update_legal_moves()
     
     def algebraic_to_index(self, notation: str) -> tuple[int, int]:
         """Converts standard chess notation (e.g., 'e4') to board coordinates (row, col)."""
@@ -283,13 +359,22 @@ class Board:
     
     def record_position(self):
         key = self.compute_position_key()
+        log_debug(f"Recording key: {key}")
         self.position_history[key] = self.position_history.get(key, 0) + 1
 
     def compute_position_key(self) -> str:
+        """
+        Generates a unique string key for the current board position,
+        used for tracking repeated positions.
+        """
+        # Collect all pieces with their positions sorted
         pieces = []
         for pos in sorted(self.piece_map.keys()):
             piece = self.piece_map[pos]
-            pieces.append(f"{piece.color[0]}{type(piece).__name__[0]}{pos[0]}{pos[1]}")
+            # Use the first two characters of the piece class name
+            pieces.append(f"{piece.color[0]}{type(piece).__name__[:2]}{pos[0]}{pos[1]}")
+        
+        # Add castling rights info
         castling_rights = []
         for color in ["white", "black"]:
             row = 7 if color == "white" else 0
@@ -297,7 +382,13 @@ class Board:
                 castling_rights.append(f"{color[0]}Q")
             if isinstance(self.piece_map.get((row, 7)), Rook) and not self.piece_map[(row, 7)].has_moved:
                 castling_rights.append(f"{color[0]}K")
-        king_moved = ''.join(f"{color[0]}Km" for color in ["white", "black"] if self.piece_map.get(self.king_positions[color], None) and self.piece_map[self.king_positions[color]].has_moved)
+        
+        # Track which kings have moved
+        king_moved = ''.join(f"{color[0]}Km" for color in ["white", "black"] 
+                             if self.king_positions[color] in self.piece_map and 
+                             self.piece_map[self.king_positions[color]].has_moved)
+        
+        # Combine all info into a string key with the current player's turn
         return '|'.join([
             ''.join(pieces),
             ''.join(castling_rights),
@@ -305,30 +396,53 @@ class Board:
             str(self.ply % 2)
         ])
     
-    def generate_successor_state(self, pos, target, promo_choice=None):
-        newState = Board()
-
-        # Copy over data
-        newState.piece_map = copy.deepcopy(self.piece_map)
-        newState.king_positions = copy.deepcopy(self.king_positions)
-        newState.ply = self.ply
-        newState.time_since_capture = self.time_since_capture
-        newState.position_history = copy.deepcopy(self.position_history)
-
-        # Assume move is legal and set legal_moves to include move 
-        # (so we don't need to compute legal_moves 2x)
-        newState.legal_moves = {pos: [(target, promo_choice)]}
-
-        # Make move
-        newState.move(pos, target, promo_choice)
-
-        return newState
-    
     def get_all_legal_moves(self) -> Generator:
         """Yields (start_pos, target_pos, promotion_choice) for all legal moves."""
         for pos, moves in self.legal_moves.items():
             for target, promo in moves:
                 yield (pos, target, promo)
+
+    def is_capture(self, action):
+        target = action[1]
+        if self.is_en_passant(action) or target in self.piece_map:
+            return True
+        return False
+        
+
+    def get_capture_details(self, action):
+        """
+        Returns:
+        captured_piece: Piece,
+        captured_piece_pos: tuple,
+        prev_time_since_capture: int
+        """
+        captured_piece = None
+        captured_piece_pos = None
+        prev_time_since_capture = self.time_since_capture
+        pos, target, promo = action
+        if self.is_en_passant(action):
+            captured_piece_pos = (pos[0], target[1])
+        else:
+            captured_piece_pos = target
+        
+        captured_piece = self.piece_map[captured_piece_pos]
+        return [captured_piece, captured_piece_pos, prev_time_since_capture]
+
+    def is_en_passant(self, action):
+        pos, target, _ = action
+        # if pos not in self.piece_map:
+        #     return False
+        piece = self.piece_map[pos]
+        opp_pawn_pos = (pos[0], target[1])
+        if (isinstance(piece, Pawn)
+            and abs(pos[0] - target[0]) == abs(pos[1] - target[1]) == 1  #diag move
+            and opp_pawn_pos in self.piece_map
+            and isinstance(self.piece_map[opp_pawn_pos], Pawn)
+            and self.piece_map[opp_pawn_pos].color != piece.color
+            and self.piece_map[opp_pawn_pos].moved_two_ply == self.ply - 1):
+            return True
+        return False
+    
 
 if __name__ == "__main__":
     pass

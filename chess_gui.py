@@ -8,7 +8,7 @@ from board import Board
 from ai import ChessAI
 from pieces import Queen, Rook, Bishop, Knight
 
-MAX_DEPTH = 2
+MAX_DEPTH = 3
 
 class ChessGUI:
     def __init__(self, width=600, height=600, ai_color=None):
@@ -101,7 +101,8 @@ class ChessGUI:
                 and abs(self.selected_piece_pos[0] - promotion_row) == 1):
                 promotion_choice = self.promotion_prompt(piece.color)
             try:
-                self.chess_board.move(self.selected_piece_pos, target, promotion_choice)
+                action = (self.selected_piece_pos, target, promotion_choice)
+                self.chess_board.move(action)
             except ValueError as e:
                 print(e)
             
@@ -239,7 +240,7 @@ class ChessGUI:
                 ):
                 move = self.ai.choose_move(self.chess_board)
                 if move:
-                    self.chess_board.move(*move)
+                    self.chess_board.move(move)
 
                     # Force visual update after AI move
                     self.draw_board()
@@ -257,5 +258,9 @@ class ChessGUI:
 
 
 if __name__ == "__main__":
-    gui = ChessGUI(ai_color=input("AI color: "))
+    with open("debug_log.txt", "w") as f:
+        f.write("=== New Session ===\n")
+    # gui = ChessGUI(ai_color=input("AI color: "))
+    gui = ChessGUI(ai_color="black")
+    # gui = ChessGUI()
     gui.run()
